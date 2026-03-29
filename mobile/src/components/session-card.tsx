@@ -86,6 +86,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: Spacing.two,
   },
   pinButton: {
@@ -104,6 +105,7 @@ const styles = StyleSheet.create({
   },
   topRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.two,
     alignItems: 'flex-start',
   },

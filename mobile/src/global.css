@@ -9,3 +9,21 @@
     sans-serif;
   --font-serif: "Iowan Old Style", Georgia, "Times New Roman", serif;
 }
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  background: #f4ede3;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior-y: none;
+}
+
+* {
+  box-sizing: border-box;
+}

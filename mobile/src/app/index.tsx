@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   TextInput,
+  useWindowDimensions,
   View,
   type TextStyle,
   type ViewStyle,
@@ -98,11 +99,13 @@ function ActionButton({
   onPress,
   tone = 'primary',
   disabled = false,
+  fullWidth = false,
 }: {
   label: string;
   onPress: () => void;
   tone?: ButtonTone;
   disabled?: boolean;
+  fullWidth?: boolean;
 }) {
   const theme = useTheme();
 
@@ -129,7 +132,13 @@ function ActionButton({
 
   return (
     <Pressable disabled={disabled} onPress={onPress} style={({ pressed }) => pressed && styles.pressed}>
-      <View style={[styles.button, styleMap[tone], disabled && styles.buttonDisabled]}>
+      <View
+        style={[
+          styles.button,
+          styleMap[tone],
+          disabled && styles.buttonDisabled,
+          fullWidth && styles.buttonFullWidth,
+        ]}>
         <ThemedText type="smallBold" style={[textStyleMap[tone], disabled && styles.buttonTextDisabled]}>
           {label}
         </ThemedText>
@@ -178,6 +187,7 @@ function ControlGroup({ label, children }: React.PropsWithChildren<{ label: stri
 
 export default function HomeScreen() {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
   const {
     activeSession,
     checkBackend,
@@ -217,6 +227,7 @@ export default function HomeScreen() {
   const isSampleToolsVisible = __DEV__ || pipelineMode === 'mock';
   const isProcessing = activeSession?.status === 'processing';
   const isWeb = Platform.OS === 'web';
+  const isCompactLayout = width < 560;
   const estimatedProcessingLabel =
     activeSession && activeSession.audio.durationMs >= 30 * 60 * 1000
       ? reportLanguage === 'fr'
@@ -297,7 +308,7 @@ export default function HomeScreen() {
 
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.contentColumn}>
+          <View style={[styles.contentColumn, isCompactLayout && styles.contentColumnCompact]}>
             <SectionCard
               inverse
               eyebrow="Studio"
@@ -315,8 +326,8 @@ export default function HomeScreen() {
                   : 'MemoFlux is built for your own iPhone workflow: record or import audio, generate a clean brief, review the evidence, then export a polished PDF when you are ready.'}
               </ThemedText>
 
-              <View style={styles.heroMetrics}>
-                <View style={styles.metricBlock}>
+              <View style={[styles.heroMetrics, isCompactLayout && styles.heroMetricsCompact]}>
+                <View style={[styles.metricBlock, isCompactLayout && styles.metricBlockCompact]}>
                   <ThemedText type="smallBold" style={styles.inverseMetricLabel}>
                     Capture
                   </ThemedText>
@@ -324,7 +335,7 @@ export default function HomeScreen() {
                     {isRecording ? formatDuration(recordingDurationMs) : 'Ready'}
                   </ThemedText>
                 </View>
-                <View style={styles.metricBlock}>
+                <View style={[styles.metricBlock, isCompactLayout && styles.metricBlockCompact]}>
                   <ThemedText type="smallBold" style={styles.inverseMetricLabel}>
                     Output
                   </ThemedText>
@@ -332,7 +343,7 @@ export default function HomeScreen() {
                     Brief + detailed
                   </ThemedText>
                 </View>
-                <View style={styles.metricBlock}>
+                <View style={[styles.metricBlock, isCompactLayout && styles.metricBlockCompact]}>
                   <ThemedText type="smallBold" style={styles.inverseMetricLabel}>
                     Proof
                   </ThemedText>
@@ -342,29 +353,47 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              <View style={styles.buttonRow}>
+              <View style={[styles.buttonRow, isCompactLayout && styles.buttonRowCompact]}>
                 <ActionButton
                   label={isRecording ? 'Stop recording' : 'Start recording'}
                   onPress={() => void handlePrimaryAudioAction()}
+                  fullWidth={isCompactLayout}
                 />
-                <ActionButton label="Import audio" onPress={() => void importAudio()} tone="secondary" />
+                <ActionButton
+                  label="Import audio"
+                  onPress={() => void importAudio()}
+                  tone="secondary"
+                  fullWidth={isCompactLayout}
+                />
                 {isSampleToolsVisible ? (
-                  <ActionButton label="English sample" onPress={loadBusinessDemo} tone="secondary" />
+                  <ActionButton
+                    label="English sample"
+                    onPress={loadBusinessDemo}
+                    tone="secondary"
+                    fullWidth={isCompactLayout}
+                  />
                 ) : null}
                 {isSampleToolsVisible ? (
-                  <ActionButton label="French sample" onPress={loadFrenchDemo} tone="secondary" />
+                  <ActionButton
+                    label="French sample"
+                    onPress={loadFrenchDemo}
+                    tone="secondary"
+                    fullWidth={isCompactLayout}
+                  />
                 ) : null}
                 <ActionButton
                   label="Clear draft"
                   onPress={() => resetSession(activeSession?.id)}
                   tone="secondary"
                   disabled={!activeSession}
+                  fullWidth={isCompactLayout}
                 />
                 {isDebugToolsVisible ? (
                   <ActionButton
                     label="Check backend"
                     onPress={() => void checkBackend()}
                     tone="secondary"
+                    fullWidth={isCompactLayout}
                   />
                 ) : null}
                 <ActionButton
@@ -372,6 +401,7 @@ export default function HomeScreen() {
                   onPress={() => void handleGenerate()}
                   tone="ghost"
                   disabled={!canGenerate}
+                  fullWidth={isCompactLayout}
                 />
               </View>
 
@@ -413,7 +443,7 @@ export default function HomeScreen() {
                     value={titleDraft}
                   />
 
-                  <View style={styles.sessionMetaRow}>
+                  <View style={[styles.sessionMetaRow, isCompactLayout && styles.sessionMetaRowCompact]}>
                     <StatusPill status={activeSession.status} />
                     <ThemedText type="small" themeColor="textSecondary">
                       {templateLabel(activeSession.template, reportLanguage)}
@@ -550,8 +580,8 @@ export default function HomeScreen() {
                           ))}
                         </View>
 
-                        <View style={styles.reportGrid}>
-                          <View style={styles.reportColumn}>
+                        <View style={[styles.reportGrid, isCompactLayout && styles.reportGridCompact]}>
+                          <View style={[styles.reportColumn, isCompactLayout && styles.reportColumnCompact]}>
                             <ThemedText type="smallBold">{copy.actionItems}</ThemedText>
                             {briefReport.actionItems.map((item) => (
                               <View key={item.id} style={styles.inlineItem}>
@@ -570,7 +600,7 @@ export default function HomeScreen() {
                             ))}
                           </View>
 
-                          <View style={styles.reportColumn}>
+                          <View style={[styles.reportColumn, isCompactLayout && styles.reportColumnCompact]}>
                             <ThemedText type="smallBold">{copy.decisions}</ThemedText>
                             {briefReport.decisions.map((item) => (
                               <View key={item.id} style={styles.inlineItem}>
@@ -585,8 +615,8 @@ export default function HomeScreen() {
                           </View>
                         </View>
 
-                        <View style={styles.reportGrid}>
-                          <View style={styles.reportColumn}>
+                        <View style={[styles.reportGrid, isCompactLayout && styles.reportGridCompact]}>
+                          <View style={[styles.reportColumn, isCompactLayout && styles.reportColumnCompact]}>
                             <ThemedText type="smallBold">{copy.risks}</ThemedText>
                             {briefReport.risks.map((item) => (
                               <View key={item.id} style={styles.inlineItem}>
@@ -598,7 +628,7 @@ export default function HomeScreen() {
                             ))}
                           </View>
 
-                          <View style={styles.reportColumn}>
+                          <View style={[styles.reportColumn, isCompactLayout && styles.reportColumnCompact]}>
                             <ThemedText type="smallBold">{copy.openQuestions}</ThemedText>
                             {briefReport.followUpQuestions.map((question) => (
                               <View key={question} style={styles.inlineItem}>
@@ -701,6 +731,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  buttonFullWidth: {
+    width: '100%',
+    minWidth: 0,
+  },
   buttonDisabled: {
     opacity: 0.45,
   },
@@ -708,6 +742,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.two,
+  },
+  buttonRowCompact: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
   },
   buttonTextDisabled: {
     opacity: 0.7,
@@ -732,6 +770,9 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     paddingBottom: BottomTabInset + Spacing.four,
   },
+  contentColumnCompact: {
+    maxWidth: 560,
+  },
   controlGroup: {
     gap: Spacing.two,
   },
@@ -746,6 +787,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.two,
+  },
+  heroMetricsCompact: {
+    flexDirection: 'column',
   },
   heroStatus: {
     color: 'rgba(255,247,239,0.72)',
@@ -765,6 +809,9 @@ const styles = StyleSheet.create({
   metricBlock: {
     minWidth: 140,
     gap: 4,
+  },
+  metricBlockCompact: {
+    minWidth: 0,
   },
   modePill: {
     paddingHorizontal: Spacing.three,
@@ -817,10 +864,17 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
     minWidth: 220,
   },
+  reportColumnCompact: {
+    minWidth: 0,
+    width: '100%',
+  },
   reportGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.three,
+  },
+  reportGridCompact: {
+    flexDirection: 'column',
   },
   safeArea: {
     flex: 1,
@@ -840,6 +894,10 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.two,
     alignItems: 'center',
+  },
+  sessionMetaRowCompact: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
   },
   titleInput: {
     borderWidth: 1,

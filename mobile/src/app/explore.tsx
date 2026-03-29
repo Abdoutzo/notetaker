@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useDeferredValue, useState } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SectionCard } from '@/components/section-card';
@@ -13,6 +13,7 @@ import { useReportStudio } from '@/providers/report-studio-provider';
 
 export default function ExploreScreen() {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
   const router = useRouter();
   const {
     activeSessionId,
@@ -23,6 +24,7 @@ export default function ExploreScreen() {
   } = useReportStudio();
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query.trim().toLowerCase());
+  const isCompactLayout = width < 560;
 
   const filteredSessions = sessions.filter((session) => {
     if (!deferredQuery) {
@@ -53,27 +55,27 @@ export default function ExploreScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}>
-          <View style={styles.contentColumn}>
+          <View style={[styles.contentColumn, isCompactLayout && styles.contentColumnCompact]}>
             <SectionCard eyebrow="Library" title="Your reports, ready when you need them">
               <ThemedText themeColor="textSecondary">
                 Search past recordings, reopen the right note quickly, and keep the final version
                 under your control before you share it.
               </ThemedText>
 
-              <View style={styles.statsRow}>
-                <View style={[styles.statCard, { backgroundColor: theme.background }]}>
+              <View style={[styles.statsRow, isCompactLayout && styles.statsRowCompact]}>
+                <View style={[styles.statCard, { backgroundColor: theme.background }, isCompactLayout && styles.statCardCompact]}>
                   <ThemedText type="smallBold">Sessions</ThemedText>
                   <ThemedText type="subtitle">{sessions.length}</ThemedText>
                 </View>
-                <View style={[styles.statCard, { backgroundColor: theme.background }]}>
+                <View style={[styles.statCard, { backgroundColor: theme.background }, isCompactLayout && styles.statCardCompact]}>
                   <ThemedText type="smallBold">Ready</ThemedText>
                   <ThemedText type="subtitle">{readySessions}</ThemedText>
                 </View>
-                <View style={[styles.statCard, { backgroundColor: theme.background }]}>
+                <View style={[styles.statCard, { backgroundColor: theme.background }, isCompactLayout && styles.statCardCompact]}>
                   <ThemedText type="smallBold">Pinned</ThemedText>
                   <ThemedText type="subtitle">{pinnedSessions}</ThemedText>
                 </View>
-                <View style={[styles.statCard, { backgroundColor: theme.background }]}>
+                <View style={[styles.statCard, { backgroundColor: theme.background }, isCompactLayout && styles.statCardCompact]}>
                   <ThemedText type="smallBold">Processing</ThemedText>
                   <ThemedText type="subtitle">{inProgressSessions}</ThemedText>
                 </View>
@@ -158,6 +160,9 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     paddingBottom: BottomTabInset + Spacing.four,
   },
+  contentColumnCompact: {
+    maxWidth: 560,
+  },
   inverseCopy: {
     color: '#fff7ef',
   },
@@ -205,9 +210,16 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     gap: 6,
   },
+  statCardCompact: {
+    minWidth: 0,
+    width: '100%',
+  },
   statsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.two,
+  },
+  statsRowCompact: {
+    flexDirection: 'column',
   },
 });
