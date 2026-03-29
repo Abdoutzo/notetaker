@@ -4,7 +4,7 @@ services:
     runtime: docker
     rootDir: server
     dockerfilePath: ./Dockerfile
-    plan: starter
+    plan: free
     autoDeploy: true
     healthCheckPath: /health
     envVars:
