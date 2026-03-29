@@ -20,6 +20,7 @@ const config: ExpoConfig = {
     infoPlist: {
       NSMicrophoneUsageDescription:
         'MemoFlux needs microphone access so you can record audio notes and turn them into structured reports.',
+      ITSAppUsesNonExemptEncryption: false,
     },
   },
   android: {
@@ -54,6 +55,12 @@ const config: ExpoConfig = {
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
+  },
+  extra: {
+    eas: {
+      projectId: 'fb244e62-66ce-452e-adfe-382d52945969',
+    },
+    router: {},
   },
   description:
     'Personal iPhone-first app for turning raw audio into structured reports backed by transcripts and timestamps.',
