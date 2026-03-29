@@ -74,6 +74,7 @@ export type AudioAsset = {
   fileName: string;
   mimeType?: string;
   sizeBytes?: number;
+  webFile?: File;
 };
 
 export type ReportSession = {

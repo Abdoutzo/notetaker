@@ -94,6 +94,7 @@ function createSessionFromAudio({
   durationMs,
   mimeType,
   sizeBytes,
+  webFile,
 }: {
   source: AudioSource;
   title: string;
@@ -102,6 +103,7 @@ function createSessionFromAudio({
   durationMs: number;
   mimeType?: string;
   sizeBytes?: number;
+  webFile?: File;
 }): ReportSession {
   const timestamp = new Date().toISOString();
 
@@ -124,6 +126,7 @@ function createSessionFromAudio({
       fileName,
       mimeType,
       sizeBytes,
+      webFile,
     },
   };
 }
@@ -292,6 +295,7 @@ export function ReportStudioProvider({ children }: React.PropsWithChildren) {
   }
 
   async function importAudio() {
+    const MAX_WEB_UPLOAD_BYTES = 80 * 1024 * 1024;
     const result = await DocumentPicker.getDocumentAsync({
       type: ['audio/*', 'video/*'],
       copyToCacheDirectory: true,
@@ -303,6 +307,25 @@ export function ReportStudioProvider({ children }: React.PropsWithChildren) {
     }
 
     const asset = result.assets[0];
+    const webFile =
+      Platform.OS === 'web'
+        ? ((asset as typeof asset & { file?: File | null }).file ?? undefined)
+        : undefined;
+
+    if ((asset.size ?? 0) > MAX_WEB_UPLOAD_BYTES) {
+      setStudioMessage(
+        'This file is larger than the current 80 MB upload limit. Compress it or trim it before importing.',
+      );
+      return;
+    }
+
+    if (Platform.OS === 'web' && !webFile) {
+      setStudioMessage(
+        'This browser did not expose the selected file correctly. Try Safari or re-select the file from Files.',
+      );
+      return;
+    }
+
     const nextSession = createSessionFromAudio({
       source: 'import',
       title: stripExtension(asset.name),
@@ -311,6 +334,7 @@ export function ReportStudioProvider({ children }: React.PropsWithChildren) {
       durationMs: 0,
       mimeType: asset.mimeType,
       sizeBytes: asset.size,
+      webFile,
     });
 
     putSession(nextSession);

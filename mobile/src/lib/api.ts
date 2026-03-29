@@ -6,6 +6,7 @@ function getApiBaseUrl() {
 
 const HEALTH_TIMEOUT_MS = 8_000;
 const PROCESS_TIMEOUT_MS = 15 * 60 * 1_000;
+const MAX_UPLOAD_BYTES = 80 * 1024 * 1024;
 
 async function fetchWithTimeout(
   input: RequestInfo | URL,
@@ -114,11 +115,20 @@ export async function processAudioWithApi(session: ReportSession): Promise<Proce
   formData.append('recordedAt', session.createdAt);
   formData.append('reportLanguage', session.reportLanguage);
   formData.append('cacheKey', buildClientCacheKey(session));
-  formData.append('file', {
-    uri: session.audio.uri,
-    name: session.audio.fileName,
-    type: session.audio.mimeType ?? 'audio/m4a',
-  } as never);
+
+  if ((session.audio.sizeBytes ?? 0) > MAX_UPLOAD_BYTES) {
+    throw new Error('This file is larger than the current 80 MB upload limit.');
+  }
+
+  if (session.audio.webFile) {
+    formData.append('file', session.audio.webFile, session.audio.fileName);
+  } else {
+    formData.append('file', {
+      uri: session.audio.uri,
+      name: session.audio.fileName,
+      type: session.audio.mimeType ?? 'audio/m4a',
+    } as never);
+  }
 
   const response = await fetchWithTimeout(
     `${apiBaseUrl}/v1/reports/process`,

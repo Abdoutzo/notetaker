@@ -195,5 +195,16 @@ export async function loadSessions() {
 }
 
 export async function saveSessions(sessions: ReportSession[]) {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+  await AsyncStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify(
+      sessions.map((session) => ({
+        ...session,
+        audio: {
+          ...session.audio,
+          webFile: undefined,
+        },
+      })),
+    ),
+  );
 }
