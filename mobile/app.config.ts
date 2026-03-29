@@ -2,7 +2,7 @@ import type { ExpoConfig } from '@expo/config-types';
 
 const appName = process.env.EXPO_PUBLIC_APP_NAME ?? 'MemoFlux';
 const appSlug = process.env.EXPO_PUBLIC_APP_SLUG ?? 'memo-flux';
-const iosBundleIdentifier = process.env.IOS_BUNDLE_IDENTIFIER ?? 'com.memoflux.personal';
+const iosBundleIdentifier = process.env.IOS_BUNDLE_IDENTIFIER ?? 'com.abdouxa.memoflux';
 const appScheme = process.env.EXPO_PUBLIC_APP_SCHEME ?? 'memoflux';
 
 const config: ExpoConfig = {
@@ -30,7 +30,7 @@ const config: ExpoConfig = {
       backgroundImage: './assets/images/android-icon-background.png',
       monochromeImage: './assets/images/android-icon-monochrome.png',
     },
-    package: process.env.ANDROID_PACKAGE ?? 'com.memoflux.personal',
+    package: process.env.ANDROID_PACKAGE ?? 'com.abdouxa.memoflux',
     predictiveBackGestureEnabled: false,
   },
   web: {
