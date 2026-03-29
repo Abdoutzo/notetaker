@@ -26,8 +26,8 @@ services:
     name: memo-flux-web
     runtime: static
     rootDir: mobile
-    buildCommand: npm ci && npx expo export --platform web
-    staticPublishPath: mobile/dist
+    buildCommand: npm ci --include=dev && npm run export:web
+    staticPublishPath: dist
     autoDeploy: true
     pullRequestPreviewsEnabled: false
     envVars:
