@@ -12,6 +12,7 @@ server/.cache/
 # Logs
 mobile/expo-start.log
 server/server.log
+server/tmp-test-audio.bin
 npm-debug.*
 yarn-debug.*
 yarn-error.*
