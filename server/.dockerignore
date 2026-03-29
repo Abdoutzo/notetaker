@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+.cache
+server.log
+tmp-test-audio.bin
+npm-debug.log

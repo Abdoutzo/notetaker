@@ -1,0 +1,34 @@
+# Dependencies
+mobile/node_modules/
+server/node_modules/
+
+# Build outputs
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+server/dist/
+server/.cache/
+
+# Logs
+mobile/expo-start.log
+server/server.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Environment and secrets
+mobile/.env
+mobile/.env.local
+server/.env
+server/.env.local
+
+# Generated native folders
+mobile/ios/
+mobile/android/
+
+# OS / editor
+.DS_Store
+*.pem
+*.orig.*
+*.tsbuildinfo
+mobile/.git.backup/

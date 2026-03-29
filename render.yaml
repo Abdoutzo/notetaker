@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: memo-flux-server
+    runtime: docker
+    rootDir: server
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_TRANSCRIPTION_MODEL
+        value: gpt-4o-transcribe-diarize
+      - key: OPENAI_REPORT_MODEL
+        value: gpt-4.1-mini
+      - key: MAX_UPLOAD_MB
+        value: "80"
+      - key: SEGMENT_SECONDS
+        value: "600"
+      - key: TRANSCRIPTION_CONCURRENCY
+        value: "2"
+      - key: ENABLE_REMOTE_SOURCE_URLS
+        value: "true"
