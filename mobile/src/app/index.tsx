@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -51,11 +52,16 @@ function getReportCopy(language: ReportLanguage) {
         reportLanguage: 'Langue du rapport',
         outputMode: 'Niveau de detail',
         reviewStatus: 'Statut de validation',
-        exportPdf: 'Exporter PDF',
+        exportPdf: Platform.OS === 'web' ? 'Imprimer / PDF' : 'Exporter PDF',
         reportReadyHint: 'Le PDF assemble la version detaillee et les preuves du transcript.',
+        reportReadyHintWeb:
+          'Dans le navigateur, le bouton ouvre la boite d impression pour enregistrer en PDF.',
         draftTitle: 'Accuracy maximale = verification humaine',
         draftBody:
           "Aucune transcription n'est parfaite. Utilise le transcript, les timestamps et le statut Reviewed ou Final avant diffusion.",
+        webInstallTitle: 'Utiliser MemoFlux comme app web',
+        webInstallBody:
+          "Sur iPhone, ouvre cette page dans Safari puis Partager > Ajouter a l ecran d accueil pour l utiliser comme une vraie app.",
       }
     : {
         outputEyebrow: 'Generated output',
@@ -74,11 +80,16 @@ function getReportCopy(language: ReportLanguage) {
         reportLanguage: 'Report language',
         outputMode: 'Detail level',
         reviewStatus: 'Review status',
-        exportPdf: 'Export PDF',
+        exportPdf: Platform.OS === 'web' ? 'Print / PDF' : 'Export PDF',
         reportReadyHint: 'The PDF combines the detailed version and transcript evidence.',
+        reportReadyHintWeb:
+          'In the browser, the button opens the print dialog so you can save the report as a PDF.',
         draftTitle: 'Maximum accuracy needs human review',
         draftBody:
           'No speech pipeline is perfect. Use the transcript, timestamps, and the Reviewed or Final status before sharing.',
+        webInstallTitle: 'Use MemoFlux as a web app',
+        webInstallBody:
+          'On iPhone, open this page in Safari, then use Share > Add to Home Screen to use it like a real app.',
       };
 }
 
@@ -205,6 +216,7 @@ export default function HomeScreen() {
   const isDebugToolsVisible = __DEV__;
   const isSampleToolsVisible = __DEV__ || pipelineMode === 'mock';
   const isProcessing = activeSession?.status === 'processing';
+  const isWeb = Platform.OS === 'web';
   const estimatedProcessingLabel =
     activeSession && activeSession.audio.durationMs >= 30 * 60 * 1000
       ? reportLanguage === 'fr'
@@ -298,8 +310,9 @@ export default function HomeScreen() {
                 </View>
               }>
               <ThemedText style={styles.heroCopy}>
-                MemoFlux is built for your own iPhone workflow: record or import audio, generate
-                a clean brief, review the evidence, then export a polished PDF when you are ready.
+                {isWeb
+                  ? 'MemoFlux works as a personal web app: record or import audio, generate a clean brief, review the evidence, then save a polished PDF when you are ready.'
+                  : 'MemoFlux is built for your own iPhone workflow: record or import audio, generate a clean brief, review the evidence, then export a polished PDF when you are ready.'}
               </ThemedText>
 
               <View style={styles.heroMetrics}>
@@ -369,6 +382,12 @@ export default function HomeScreen() {
                   : 'Start with a short note for the fastest turnaround. Reuse the same recording when you want a refined report without paying for a fresh transcription.'}
               </ThemedText>
             </SectionCard>
+
+            {isWeb ? (
+              <SectionCard eyebrow="Web app" title={copy.webInstallTitle}>
+                <ThemedText themeColor="textSecondary">{copy.webInstallBody}</ThemedText>
+              </SectionCard>
+            ) : null}
 
             {!isHydrated ? (
               <SectionCard eyebrow="Loading" title="Preparing your local library">
@@ -502,7 +521,9 @@ export default function HomeScreen() {
                         disabled={!canExport}
                       />
                     }>
-                    <ThemedText themeColor="textSecondary">{copy.reportReadyHint}</ThemedText>
+                    <ThemedText themeColor="textSecondary">
+                      {isWeb ? copy.reportReadyHintWeb : copy.reportReadyHint}
+                    </ThemedText>
 
                     {activeSession.reviewStatus === 'draft' ? (
                       <View style={[styles.alertBox, { backgroundColor: theme.warningSoft }]}>

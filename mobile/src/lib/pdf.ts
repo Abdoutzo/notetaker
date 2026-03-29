@@ -1,5 +1,6 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { Platform } from 'react-native';
 
 import {
   formatDuration,
@@ -235,6 +236,14 @@ export function buildReportHtml(session: ReportSession) {
 export async function exportSessionPdf(session: ReportSession) {
   if (!session.report?.brief || !session.report.detailed) {
     throw new Error('Generate a report before exporting a PDF.');
+  }
+
+  if (Platform.OS === 'web') {
+    await Print.printAsync({
+      html: buildReportHtml(session),
+    });
+
+    return '';
   }
 
   const { uri } = await Print.printToFileAsync({

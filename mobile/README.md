@@ -47,6 +47,17 @@ To use MemoFlux as a real personal app on iPhone without opening local terminals
 1. a hosted backend for transcription and report generation
 2. an installed iPhone build
 
+## Web app route without Apple Developer
+
+If you do not want to pay for Apple Developer, MemoFlux can now also run as a hosted web app:
+
+1. deploy the backend from `../server`
+2. deploy the Expo web build as a static site
+3. open it in Safari on iPhone
+4. use `Share > Add to Home Screen`
+
+This gives you a personal app-like experience without TestFlight or the App Store. The browser version also supports importing audio, generating reports, and saving the final report through the browser print dialog as PDF.
+
 ### Hosted backend
 
 The backend in `../server` is now ready for container deployment through the included `Dockerfile`.

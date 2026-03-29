@@ -22,3 +22,14 @@ services:
         value: "2"
       - key: ENABLE_REMOTE_SOURCE_URLS
         value: "true"
+  - type: web
+    name: memo-flux-web
+    runtime: static
+    rootDir: mobile
+    buildCommand: npm ci && npx expo export --platform web
+    staticPublishPath: mobile/dist
+    autoDeploy: true
+    pullRequestPreviewsEnabled: false
+    envVars:
+      - key: EXPO_PUBLIC_API_BASE_URL
+        value: https://memo-flux-server.onrender.com

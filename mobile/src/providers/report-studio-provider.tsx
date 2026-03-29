@@ -1,6 +1,7 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
 import React, { createContext, startTransition, useContext, useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 
 import {
   BUSINESS_DEMO_AUDIO,
@@ -136,7 +137,9 @@ export function ReportStudioProvider({ children }: React.PropsWithChildren) {
   const inFlightSessionIdsRef = useRef(new Set<string>());
   const [studioMessage, setStudioMessage] = useState(
     hasConfiguredApi()
-      ? 'Live processing is ready. Record or import audio to generate a report.'
+      ? Platform.OS === 'web'
+        ? 'Live processing is ready. Record or import audio in the browser to generate a report.'
+        : 'Live processing is ready. Record or import audio to generate a report.'
       : 'Sample mode is active. You can still explore the app flow before connecting a live backend.',
   );
 
@@ -220,7 +223,11 @@ export function ReportStudioProvider({ children }: React.PropsWithChildren) {
 
     const permissionResponse = await Audio.requestPermissionsAsync();
     if (!permissionResponse.granted) {
-      setStudioMessage('Microphone access is required to record on iPhone.');
+      setStudioMessage(
+        Platform.OS === 'web'
+          ? 'Microphone access is required to record in the browser.'
+          : 'Microphone access is required to record on iPhone.',
+      );
       return;
     }
 
@@ -241,7 +248,11 @@ export function ReportStudioProvider({ children }: React.PropsWithChildren) {
     await nextRecorder.startAsync();
     setRecorder(nextRecorder);
     setRecordingDurationMs(0);
-    setStudioMessage('Recording started. Speak naturally, then stop when you are ready to structure the note.');
+    setStudioMessage(
+      Platform.OS === 'web'
+        ? 'Recording started in the browser. Speak naturally, then stop when you are ready to structure the note.'
+        : 'Recording started. Speak naturally, then stop when you are ready to structure the note.',
+    );
   }
 
   async function stopRecording() {
