@@ -1,4 +1,5 @@
 import type { ProcessAudioResponse, ReportSession } from '@/types/report';
+import { Platform } from 'react-native';
 
 function getApiBaseUrl() {
   return process.env.EXPO_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ?? null;
@@ -7,6 +8,14 @@ function getApiBaseUrl() {
 const HEALTH_TIMEOUT_MS = 8_000;
 const PROCESS_TIMEOUT_MS = 15 * 60 * 1_000;
 const MAX_UPLOAD_BYTES = 80 * 1024 * 1024;
+
+function reachabilityMessage(apiBaseUrl: string) {
+  if (Platform.OS === 'web') {
+    return `This browser could not reach the backend at ${apiBaseUrl}. Open ${apiBaseUrl}/health in a new tab and confirm the web app is online.`;
+  }
+
+  return `This device could not reach the backend at ${apiBaseUrl}. Open ${apiBaseUrl}/health in the browser and confirm the app can access the internet.`;
+}
 
 async function fetchWithTimeout(
   input: RequestInfo | URL,
@@ -60,7 +69,7 @@ export async function pingApi() {
       method: 'GET',
     },
     HEALTH_TIMEOUT_MS,
-    `The iPhone could not reach the backend at ${apiBaseUrl}. Open ${apiBaseUrl}/health in Safari and confirm Expo Go is on the same Wi-Fi.`,
+    reachabilityMessage(apiBaseUrl),
   );
 
   if (!response.ok) {
@@ -79,6 +88,16 @@ export async function processAudioWithApi(session: ReportSession): Promise<Proce
   }
 
   await pingApi();
+
+  if (
+    Platform.OS === 'web' &&
+    !/^https?:\/\//i.test(session.audio.uri) &&
+    !session.audio.webFile
+  ) {
+    throw new Error(
+      'This browser no longer has access to the selected local file. Re-import the audio, then generate the report again.',
+    );
+  }
 
   if (/^https?:\/\//i.test(session.audio.uri)) {
     const response = await fetchWithTimeout(

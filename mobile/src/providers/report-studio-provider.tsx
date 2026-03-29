@@ -59,6 +59,11 @@ type ReportStudioContextValue = {
 };
 
 const ReportStudioContext = createContext<ReportStudioContextValue | null>(null);
+const isLivePipeline = hasConfiguredApi();
+
+function isBuiltInSeedSession(session: ReportSession) {
+  return session.id === 'seed-demo-session' || session.audio.uri.startsWith('demo://');
+}
 
 function createId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -139,7 +144,7 @@ export function ReportStudioProvider({ children }: React.PropsWithChildren) {
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
   const inFlightSessionIdsRef = useRef(new Set<string>());
   const [studioMessage, setStudioMessage] = useState(
-    hasConfiguredApi()
+    isLivePipeline
       ? Platform.OS === 'web'
         ? 'Live processing is ready. Record or import audio in the browser to generate a report.'
         : 'Live processing is ready. Record or import audio to generate a report.'
@@ -151,7 +156,14 @@ export function ReportStudioProvider({ children }: React.PropsWithChildren) {
 
     async function hydrate() {
       const storedSessions = await loadSessions();
-      const initialSessions = storedSessions?.length ? storedSessions : [createSeedSession()];
+      const sanitizedSessions = isLivePipeline
+        ? (storedSessions ?? []).filter((session) => !isBuiltInSeedSession(session))
+        : storedSessions;
+      const initialSessions = sanitizedSessions?.length
+        ? sanitizedSessions
+        : isLivePipeline
+          ? []
+          : [createSeedSession()];
 
       if (!isMounted) {
         return;
@@ -213,7 +225,7 @@ export function ReportStudioProvider({ children }: React.PropsWithChildren) {
     inFlightSessionIdsRef.current.delete(sessionId);
     patchSession(sessionId, (session) => invalidateDerivedOutput(session));
     setStudioMessage(
-      hasConfiguredApi()
+      isLivePipeline
         ? 'Draft cleared. You can generate the report again when you are ready.'
         : 'Draft cleared. You can generate the sample report again when you are ready.',
     );
@@ -423,7 +435,7 @@ export function ReportStudioProvider({ children }: React.PropsWithChildren) {
     }));
 
     setStudioMessage(
-      hasConfiguredApi()
+      isLivePipeline
         ? 'Processing your audio. Long recordings can take several minutes.'
         : 'Running the local mock pipeline so you can validate the product flow first.',
     );
@@ -539,12 +551,16 @@ export function ReportStudioProvider({ children }: React.PropsWithChildren) {
   }
 
   async function checkBackend() {
-    if (!hasConfiguredApi()) {
+    if (!isLivePipeline) {
       setStudioMessage('No backend configured. The app is currently in mock mode.');
       return;
     }
 
-    setStudioMessage('Checking backend connectivity from the iPhone...');
+    setStudioMessage(
+      Platform.OS === 'web'
+        ? 'Checking backend connectivity from this browser...'
+        : 'Checking backend connectivity from this device...',
+    );
 
     try {
       const health = await pingApi();
@@ -553,7 +569,7 @@ export function ReportStudioProvider({ children }: React.PropsWithChildren) {
       );
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'The backend health check failed from the iPhone.';
+        error instanceof Error ? error.message : 'The backend health check failed from this device.';
       setStudioMessage(message);
     }
   }
@@ -566,7 +582,7 @@ export function ReportStudioProvider({ children }: React.PropsWithChildren) {
     isRecording: Boolean(recorder),
     recordingDurationMs,
     studioMessage,
-    pipelineMode: hasConfiguredApi() ? 'api' : 'mock',
+    pipelineMode: isLivePipeline ? 'api' : 'mock',
     templateOptions: TEMPLATE_OPTIONS,
     marketInsights: MARKET_INSIGHTS,
     personalPrinciples: PERSONAL_PRODUCT_PRINCIPLES,
