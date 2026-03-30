@@ -442,7 +442,9 @@ export function ReportStudioProvider({ children }: React.PropsWithChildren) {
 
     try {
       const processed = hasConfiguredApi()
-        ? await processAudioWithApi(session)
+        ? await processAudioWithApi(session, (message) => {
+            setStudioMessage(message);
+          })
         : await generateMockReport(session);
 
       startTransition(() => {

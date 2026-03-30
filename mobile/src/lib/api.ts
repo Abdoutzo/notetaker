@@ -6,8 +6,21 @@ function getApiBaseUrl() {
 }
 
 const HEALTH_TIMEOUT_MS = 8_000;
-const PROCESS_TIMEOUT_MS = 15 * 60 * 1_000;
+const PROCESS_START_TIMEOUT_MS = 10 * 60 * 1_000;
+const JOB_POLL_TIMEOUT_MS = 15_000;
+const JOB_TOTAL_TIMEOUT_MS = 45 * 60 * 1_000;
+const JOB_POLL_INTERVAL_MS = 4_000;
 const MAX_UPLOAD_BYTES = 80 * 1024 * 1024;
+
+type ProcessJobStatus = 'queued' | 'processing' | 'completed' | 'failed';
+
+type ProcessJobResponse = {
+  jobId: string;
+  status: ProcessJobStatus;
+  message: string;
+  result?: ProcessAudioResponse;
+  error?: string;
+};
 
 function reachabilityMessage(apiBaseUrl: string) {
   if (Platform.OS === 'web') {
@@ -80,7 +93,58 @@ export async function pingApi() {
   return response.json();
 }
 
-export async function processAudioWithApi(session: ReportSession): Promise<ProcessAudioResponse> {
+function delay(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function pollJobUntilFinished(
+  apiBaseUrl: string,
+  jobId: string,
+  sessionTitle: string,
+  onProgress?: (message: string) => void,
+) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < JOB_TOTAL_TIMEOUT_MS) {
+    const response = await fetchWithTimeout(
+      `${apiBaseUrl}/v1/reports/jobs/${jobId}`,
+      {
+        method: 'GET',
+      },
+      JOB_POLL_TIMEOUT_MS,
+      `The backend is still working on ${sessionTitle}. The job status request timed out.`,
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || 'The job status endpoint returned an error.');
+    }
+
+    const payload = (await response.json()) as ProcessJobResponse;
+    onProgress?.(payload.message);
+
+    if (payload.status === 'completed' && payload.result) {
+      return payload.result;
+    }
+
+    if (payload.status === 'failed') {
+      throw new Error(payload.error || payload.message || 'The backend job failed.');
+    }
+
+    await delay(JOB_POLL_INTERVAL_MS);
+  }
+
+  throw new Error(
+    `Processing is taking longer than expected for ${sessionTitle}. The job is still running on the backend, so try again in a few minutes.`,
+  );
+}
+
+export async function processAudioWithApi(
+  session: ReportSession,
+  onProgress?: (message: string) => void,
+): Promise<ProcessAudioResponse> {
   const apiBaseUrl = getApiBaseUrl();
 
   if (!apiBaseUrl) {
@@ -88,6 +152,7 @@ export async function processAudioWithApi(session: ReportSession): Promise<Proce
   }
 
   await pingApi();
+  onProgress?.('Backend reachable. Starting the processing job.');
 
   if (
     Platform.OS === 'web' &&
@@ -116,8 +181,8 @@ export async function processAudioWithApi(session: ReportSession): Promise<Proce
           cacheKey: buildClientCacheKey(session),
         }),
       },
-      PROCESS_TIMEOUT_MS,
-      `The backend did not answer in time for ${session.title}. The connectivity check passed, so the server is likely still processing or stuck.`,
+      PROCESS_START_TIMEOUT_MS,
+      `The backend did not accept the job in time for ${session.title}. Try again once the server is responsive.`,
     );
 
     if (!response.ok) {
@@ -125,7 +190,9 @@ export async function processAudioWithApi(session: ReportSession): Promise<Proce
       throw new Error(errorText || 'The report API returned an error.');
     }
 
-    return (await response.json()) as ProcessAudioResponse;
+    const payload = (await response.json()) as ProcessJobResponse;
+    onProgress?.(payload.message);
+    return pollJobUntilFinished(apiBaseUrl, payload.jobId, session.title, onProgress);
   }
 
   const formData = new FormData();
@@ -155,8 +222,8 @@ export async function processAudioWithApi(session: ReportSession): Promise<Proce
       method: 'POST',
       body: formData,
     },
-    PROCESS_TIMEOUT_MS,
-    `The backend did not answer in time for ${session.title}. The connectivity check passed, so the server is likely still processing or stuck.`,
+    PROCESS_START_TIMEOUT_MS,
+    `The backend did not accept the job in time for ${session.title}. Try again once the server is responsive.`,
   );
 
   if (!response.ok) {
@@ -164,5 +231,7 @@ export async function processAudioWithApi(session: ReportSession): Promise<Proce
     throw new Error(errorText || 'The report API returned an error.');
   }
 
-  return (await response.json()) as ProcessAudioResponse;
+  const payload = (await response.json()) as ProcessJobResponse;
+  onProgress?.(payload.message);
+  return pollJobUntilFinished(apiBaseUrl, payload.jobId, session.title, onProgress);
 }

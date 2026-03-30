@@ -34,6 +34,21 @@ const bodySchema = z.object({
   cacheKey: z.string().trim().min(1).optional(),
 });
 
+type JobStatus = 'queued' | 'processing' | 'completed' | 'failed';
+
+type JobRecord = {
+  id: string;
+  status: JobStatus;
+  message: string;
+  createdAt: string;
+  updatedAt: string;
+  result?: Awaited<ReturnType<typeof buildStructuredReport>>;
+  error?: string;
+};
+
+const jobs = new Map<string, JobRecord>();
+const JOB_RETENTION_MS = 24 * 60 * 60 * 1000;
+
 app.use(cors());
 app.use((request, _response, next) => {
   console.log(`[HTTP] ${request.method} ${request.path} ${request.headers['content-type'] ?? ''}`.trim());
@@ -49,6 +64,56 @@ app.get('/health', (_request, response) => {
   });
 });
 
+function createJob(id: string, message: string) {
+  const now = new Date().toISOString();
+  const job: JobRecord = {
+    id,
+    status: 'queued',
+    message,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  jobs.set(id, job);
+  return job;
+}
+
+function updateJob(id: string, updates: Partial<JobRecord>) {
+  const current = jobs.get(id);
+
+  if (!current) {
+    return;
+  }
+
+  jobs.set(id, {
+    ...current,
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+function serializeJob(job: JobRecord) {
+  return {
+    jobId: job.id,
+    status: job.status,
+    message: job.message,
+    ...(job.status === 'completed' && job.result ? { result: job.result } : {}),
+    ...(job.status === 'failed' && job.error ? { error: job.error } : {}),
+  };
+}
+
+function purgeOldJobs() {
+  const now = Date.now();
+
+  for (const [jobId, job] of jobs.entries()) {
+    if (now - new Date(job.updatedAt).getTime() > JOB_RETENTION_MS) {
+      jobs.delete(jobId);
+    }
+  }
+}
+
+setInterval(purgeOldJobs, 30 * 60 * 1000).unref?.();
+
 function runMulterSingle(request: express.Request, response: express.Response) {
   return new Promise<void>((resolve, reject) => {
     upload.single('file')(request, response, (error) => {
@@ -62,9 +127,149 @@ function runMulterSingle(request: express.Request, response: express.Response) {
   });
 }
 
-app.post('/v1/reports/process', async (request, response, next) => {
+async function runProcessingPipeline(params: {
+  requestId: string;
+  parsedBody: z.infer<typeof bodySchema>;
+  uploadedFile?: Express.Multer.File;
+  onProgress?: (message: string) => void;
+}) {
   const cleanupPaths = new Set<string>();
   let workingDirectory: string | null = null;
+  const { requestId, parsedBody, uploadedFile, onProgress } = params;
+
+  try {
+    const processingInput: ProcessAudioInput = {
+      template: parsedBody.template,
+      title: parsedBody.title,
+      recordedAt: parsedBody.recordedAt,
+      reportLanguage: parsedBody.reportLanguage,
+    };
+
+    const transcriptCacheKey = parsedBody.cacheKey ?? parsedBody.sourceUrl;
+    const responseCacheKey = transcriptCacheKey
+      ? buildResponseCacheKey({
+          cacheKey: transcriptCacheKey,
+          template: processingInput.template,
+          reportLanguage: processingInput.reportLanguage,
+          title: processingInput.title,
+        })
+      : null;
+
+    if (responseCacheKey) {
+      const cachedResponse = await getCachedResponse(responseCacheKey);
+      if (cachedResponse) {
+        console.log(`[${requestId}] response cache hit`);
+        onProgress?.('Report already prepared. Returning cached result.');
+        return {
+          transcript: cachedResponse.transcript,
+          report: cachedResponse.report,
+          sourceLanguage: cachedResponse.sourceLanguage,
+        };
+      }
+    }
+
+    const cachedTranscript = transcriptCacheKey
+      ? await getCachedTranscript(transcriptCacheKey)
+      : null;
+
+    let transcriptionResult = cachedTranscript
+      ? {
+          transcript: cachedTranscript.transcript,
+          sourceLanguage: cachedTranscript.sourceLanguage,
+        }
+      : null;
+
+    if (cachedTranscript) {
+      console.log(
+        `[${requestId}] transcript cache hit | segments=${cachedTranscript.transcript.length} | sourceLanguage=${cachedTranscript.sourceLanguage}`,
+      );
+      onProgress?.('Transcript cache hit. Drafting the report now.');
+    }
+
+    if (!transcriptionResult) {
+      workingDirectory = await createWorkingDirectory();
+      console.log(
+        `[${requestId}] working directory created | template=${processingInput.template} | reportLanguage=${processingInput.reportLanguage}`,
+      );
+      onProgress?.('Preparing secure workspace for audio processing.');
+      if (uploadedFile?.path) {
+        cleanupPaths.add(uploadedFile.path);
+      }
+
+      console.log(`[${requestId}] materializing input audio`);
+      onProgress?.('Fetching the source audio.');
+      const inputPath = await materializeInputAudio({
+        uploadedFile,
+        sourceUrl: parsedBody.sourceUrl,
+        workingDirectory,
+      });
+
+      console.log(`[${requestId}] preparing transcription files`);
+      onProgress?.('Normalizing the audio for transcription.');
+      const transcriptionFiles = await prepareTranscriptionFiles(inputPath, workingDirectory);
+      console.log(`[${requestId}] transcription will use ${transcriptionFiles.length} file(s)`);
+      onProgress?.(
+        `Audio ready. Transcription will run in ${transcriptionFiles.length} chunk${transcriptionFiles.length > 1 ? 's' : ''}.`,
+      );
+
+      console.log(`[${requestId}] starting transcription`);
+      transcriptionResult = await transcribeAudio(transcriptionFiles, (message) => {
+        console.log(`[${requestId}] ${message}`);
+        onProgress?.(message);
+      });
+      console.log(
+        `[${requestId}] transcription finished | segments=${transcriptionResult.transcript.length} | sourceLanguage=${transcriptionResult.sourceLanguage}`,
+      );
+      onProgress?.('Transcription finished. Saving transcript cache.');
+
+      if (transcriptCacheKey) {
+        await setCachedTranscript(transcriptCacheKey, transcriptionResult);
+        console.log(`[${requestId}] transcript cache saved`);
+      }
+    }
+
+    console.log(`[${requestId}] generating structured report`);
+    onProgress?.('Generating the structured report.');
+    const structuredReport = await buildStructuredReport(
+      processingInput,
+      transcriptionResult.transcript,
+      transcriptionResult.sourceLanguage,
+    );
+    console.log(`[${requestId}] report generation finished`);
+
+    if (responseCacheKey) {
+      await setCachedResponse(responseCacheKey, structuredReport);
+      console.log(`[${requestId}] response cache saved`);
+    }
+    onProgress?.('Report finished.');
+    return structuredReport;
+  } finally {
+    await Promise.all(
+      [...cleanupPaths].map(async (filePath) => {
+        await rm(filePath, { force: true });
+      }),
+    );
+
+    if (workingDirectory) {
+      await cleanupWorkingDirectory(workingDirectory);
+    }
+  }
+}
+
+app.get('/v1/reports/jobs/:jobId', (request, response) => {
+  const job = jobs.get(request.params.jobId);
+
+  if (!job) {
+    response.status(404).json({
+      error: 'Job not found.',
+    });
+    return;
+  }
+
+  response.json(serializeJob(job));
+});
+
+app.post('/v1/reports/process', async (request, response, next) => {
   const requestId = randomUUID();
 
   try {
@@ -88,113 +293,42 @@ app.post('/v1/reports/process', async (request, response, next) => {
       return;
     }
 
-    const processingInput: ProcessAudioInput = {
-      template: parsedBody.template,
-      title: parsedBody.title,
-      recordedAt: parsedBody.recordedAt,
-      reportLanguage: parsedBody.reportLanguage,
-    };
+    createJob(requestId, 'Job queued. Preparing the request.');
+    response.status(202).json({
+      jobId: requestId,
+      status: 'queued',
+      message: 'Job queued. Preparing the request.',
+    });
 
-    const transcriptCacheKey = parsedBody.cacheKey ?? parsedBody.sourceUrl;
-    const responseCacheKey = transcriptCacheKey
-      ? buildResponseCacheKey({
-          cacheKey: transcriptCacheKey,
-          template: processingInput.template,
-          reportLanguage: processingInput.reportLanguage,
-          title: processingInput.title,
-        })
-      : null;
-
-    if (responseCacheKey) {
-      const cachedResponse = await getCachedResponse(responseCacheKey);
-      if (cachedResponse) {
-        console.log(`[${requestId}] response cache hit`);
-        response.json({
-          transcript: cachedResponse.transcript,
-          report: cachedResponse.report,
-          sourceLanguage: cachedResponse.sourceLanguage,
+    void runProcessingPipeline({
+      requestId,
+      parsedBody,
+      uploadedFile: request.file,
+      onProgress: (message) => {
+        updateJob(requestId, {
+          status: 'processing',
+          message,
         });
-        return;
-      }
-    }
-
-    const cachedTranscript = transcriptCacheKey
-      ? await getCachedTranscript(transcriptCacheKey)
-      : null;
-
-    let transcriptionResult = cachedTranscript
-      ? {
-          transcript: cachedTranscript.transcript,
-          sourceLanguage: cachedTranscript.sourceLanguage,
-        }
-      : null;
-
-    if (cachedTranscript) {
-      console.log(
-        `[${requestId}] transcript cache hit | segments=${cachedTranscript.transcript.length} | sourceLanguage=${cachedTranscript.sourceLanguage}`,
-      );
-    }
-
-    if (!transcriptionResult) {
-      workingDirectory = await createWorkingDirectory();
-      console.log(
-        `[${requestId}] working directory created | template=${processingInput.template} | reportLanguage=${processingInput.reportLanguage}`,
-      );
-      if (request.file?.path) {
-        cleanupPaths.add(request.file.path);
-      }
-
-      console.log(`[${requestId}] materializing input audio`);
-      const inputPath = await materializeInputAudio({
-        uploadedFile: request.file,
-        sourceUrl: parsedBody.sourceUrl,
-        workingDirectory,
+      },
+    })
+      .then((result) => {
+        updateJob(requestId, {
+          status: 'completed',
+          message: 'Report ready.',
+          result,
+        });
+      })
+      .catch((error) => {
+        console.error('MemoFlux server error:', error);
+        const sanitized = sanitizeServerError(error);
+        updateJob(requestId, {
+          status: 'failed',
+          message: sanitized.message,
+          error: sanitized.message,
+        });
       });
-
-      console.log(`[${requestId}] preparing transcription files`);
-      const transcriptionFiles = await prepareTranscriptionFiles(inputPath, workingDirectory);
-      console.log(`[${requestId}] transcription will use ${transcriptionFiles.length} file(s)`);
-
-      console.log(`[${requestId}] starting transcription`);
-      transcriptionResult = await transcribeAudio(transcriptionFiles, (message) => {
-        console.log(`[${requestId}] ${message}`);
-      });
-      console.log(
-        `[${requestId}] transcription finished | segments=${transcriptionResult.transcript.length} | sourceLanguage=${transcriptionResult.sourceLanguage}`,
-      );
-
-      if (transcriptCacheKey) {
-        await setCachedTranscript(transcriptCacheKey, transcriptionResult);
-        console.log(`[${requestId}] transcript cache saved`);
-      }
-    }
-
-    console.log(`[${requestId}] generating structured report`);
-    const structuredReport = await buildStructuredReport(
-      processingInput,
-      transcriptionResult.transcript,
-      transcriptionResult.sourceLanguage,
-    );
-    console.log(`[${requestId}] report generation finished`);
-
-    if (responseCacheKey) {
-      await setCachedResponse(responseCacheKey, structuredReport);
-      console.log(`[${requestId}] response cache saved`);
-    }
-
-    response.json(structuredReport);
   } catch (error) {
     next(error);
-  } finally {
-    await Promise.all(
-      [...cleanupPaths].map(async (filePath) => {
-        await rm(filePath, { force: true });
-      }),
-    );
-
-    if (workingDirectory) {
-      await cleanupWorkingDirectory(workingDirectory);
-    }
   }
 });
 
