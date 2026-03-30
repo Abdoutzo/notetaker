@@ -198,6 +198,34 @@ app.post('/v1/reports/process', async (request, response, next) => {
   }
 });
 
+function sanitizeServerError(error: unknown) {
+  const rawMessage = error instanceof Error ? error.message : 'Internal server error.';
+  const normalizedMessage = rawMessage.replace(/\s+/g, ' ').trim();
+
+  if (
+    /OPENAI_API_KEY|Headers\.append|invalid header value|authorization/i.test(normalizedMessage) ||
+    /sk-[a-z0-9_-]+/i.test(normalizedMessage)
+  ) {
+    return {
+      status: 500,
+      message:
+        'The server configuration is invalid. Check the OPENAI_API_KEY setting on the backend and paste only the raw key value.',
+    };
+  }
+
+  if (/fetch failed|network|ECONNRESET|ETIMEDOUT|ENOTFOUND/i.test(normalizedMessage)) {
+    return {
+      status: 502,
+      message: 'The server could not complete the request because an upstream service was unavailable. Try again.',
+    };
+  }
+
+  return {
+    status: 500,
+    message: 'The server could not process this request. Try again in a moment.',
+  };
+}
+
 app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
   if (error instanceof multer.MulterError) {
     response.status(400).json({
@@ -214,10 +242,10 @@ app.use((error: unknown, _request: express.Request, response: express.Response, 
     return;
   }
 
-  const message = error instanceof Error ? error.message : 'Internal server error.';
   console.error('MemoFlux server error:', error);
-  response.status(500).json({
-    error: message,
+  const sanitized = sanitizeServerError(error);
+  response.status(sanitized.status).json({
+    error: sanitized.message,
     requestId: randomUUID(),
   });
 });

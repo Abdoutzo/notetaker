@@ -6,10 +6,22 @@ const DEFAULT_SEGMENT_SECONDS = 10 * 60;
 const DEFAULT_TRANSCRIPTION_CONCURRENCY = 2;
 
 function required(name: string) {
-  const value = process.env[name];
+  const value = process.env[name]?.trim();
 
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`);
+  }
+
+  return value;
+}
+
+function requireSingleLineSecret(name: string) {
+  const value = required(name);
+
+  if (/[\r\n]/.test(value) || /\b(PORT|OPENAI_|MAX_UPLOAD_MB|SEGMENT_SECONDS|TRANSCRIPTION_CONCURRENCY)\b/.test(value)) {
+    throw new Error(
+      `${name} is invalid. Paste only the raw secret value into this environment variable, not a full .env block.`,
+    );
   }
 
   return value;
@@ -22,7 +34,7 @@ function asNumber(value: string | undefined, fallback: number) {
 
 export const config = {
   port: asNumber(process.env.PORT, DEFAULT_PORT),
-  openAiApiKey: required('OPENAI_API_KEY'),
+  openAiApiKey: requireSingleLineSecret('OPENAI_API_KEY'),
   transcriptionModel: process.env.OPENAI_TRANSCRIPTION_MODEL ?? 'gpt-4o-transcribe-diarize',
   reportModel: process.env.OPENAI_REPORT_MODEL ?? 'gpt-4.1-mini',
   maxUploadBytes: asNumber(process.env.MAX_UPLOAD_MB, DEFAULT_MAX_UPLOAD_MB) * 1024 * 1024,
