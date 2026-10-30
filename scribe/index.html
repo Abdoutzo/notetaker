@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self' https://api.groq.com https://generativelanguage.googleapis.com; object-src 'none'; base-uri 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Scribe</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23e5484d'/%3E%3Ccircle cx='16' cy='16' r='6' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot" aria-hidden="true"></span>Scribe</div>
+    <button id="settings-btn" class="ghost" type="button">Réglages</button>
+  </header>
+
+  <main>
+    <section class="card" id="new-card">
+      <h2>Nouvel enregistrement</h2>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" data-mode="pc" aria-selected="true">Réunion sur ce PC</button>
+        <button type="button" role="tab" data-mode="phone" aria-selected="false">Appel sur téléphone</button>
+        <button type="button" role="tab" data-mode="upload" aria-selected="false">Importer un fichier</button>
+      </div>
+
+      <div class="help" data-help="pc">
+        <p>Pour Teams, Meet, Zoom… Au démarrage, Chrome/Edge te demande quoi partager :</p>
+        <ul>
+          <li><strong>Teams / Zoom (application)</strong> : choisis <em>Écran entier</em> et coche <em>Partager aussi l'audio du système</em>.</li>
+          <li><strong>Meet / Teams dans le navigateur</strong> : choisis l'<em>onglet</em> de la réunion et coche <em>Partager aussi l'audio de l'onglet</em>.</li>
+        </ul>
+        <p class="muted">Ta voix (micro) et celle de l'autre (son du PC) sont enregistrées séparément : la transcription indique qui parle. Un casque donne le meilleur résultat.</p>
+      </div>
+      <div class="help" data-help="phone" hidden>
+        <p>Mets ton téléphone sur <strong>haut-parleur</strong>, posé près du PC. Le micro du PC enregistre les deux voix.</p>
+        <p class="muted">Pas de séparation automatique des voix dans ce mode : le résumé déduit qui parle du contexte.</p>
+      </div>
+      <div class="help" data-help="upload" hidden>
+        <p>Un enregistrement déjà fait (appel enregistré sur le téléphone, mémo vocal, vidéo…) : mp3, m4a, wav, ogg, webm, mp4.</p>
+      </div>
+
+      <label class="field">
+        <span>Titre (facultatif, sinon proposé automatiquement)</span>
+        <input id="title-input" type="text" maxlength="120" placeholder="Ex. Point hebdo avec Sarah">
+      </label>
+
+      <div class="controls" id="record-controls">
+        <button id="start-btn" class="primary" type="button">Démarrer l'enregistrement</button>
+        <button id="stop-btn" class="danger" type="button" hidden>Arrêter et générer le compte-rendu</button>
+        <span id="timer" class="timer" hidden>00:00</span>
+      </div>
+
+      <div class="controls" id="upload-controls" hidden>
+        <input id="file-input" type="file" accept="audio/*,video/*">
+        <button id="upload-btn" class="primary" type="button">Transcrire le fichier</button>
+      </div>
+
+      <div id="meters" class="meters" hidden>
+        <div class="meter" data-track="me"><span class="meter-label">Moi</span><div class="bar"><i></i></div></div>
+        <div class="meter" data-track="them"><span class="meter-label">Interlocuteur</span><div class="bar"><i></i></div></div>
+        <div class="meter" data-track="mix"><span class="meter-label">Micro</span><div class="bar"><i></i></div></div>
+        <p class="muted small">Garde cet onglet ouvert pendant l'appel. La transcription avance toutes les 5 minutes.</p>
+      </div>
+
+      <p id="record-error" class="error" role="alert" hidden></p>
+    </section>
+
+    <section class="card" id="session-card" hidden>
+      <div class="session-head">
+        <input id="session-title" class="title-input" type="text" maxlength="160" aria-label="Titre de la réunion">
+        <p id="session-meta" class="muted small"></p>
+      </div>
+
+      <div id="progress" class="progress" hidden>
+        <div class="progress-bar"><i></i></div>
+        <p id="progress-text" class="small"></p>
+      </div>
+      <p id="session-error" class="error" role="alert" hidden></p>
+
+      <div class="actions">
+        <button id="resume-btn" type="button" hidden>Reprendre le traitement</button>
+        <button id="resummarize-btn" type="button" hidden>Régénérer le résumé</button>
+        <button id="copy-summary-btn" type="button" hidden>Copier le résumé</button>
+        <button id="copy-transcript-btn" type="button" hidden>Copier la transcription</button>
+        <button id="export-btn" type="button" hidden>Exporter (.md)</button>
+      </div>
+
+      <h3>Compte-rendu</h3>
+      <div id="summary" class="summary"></div>
+
+      <details id="transcript-details" open>
+        <summary>Transcription</summary>
+        <div id="transcript" class="transcript"></div>
+      </details>
+    </section>
+
+    <section class="card" id="history-card">
+      <h2>Historique</h2>
+      <p class="muted small">Stocké uniquement dans ce navigateur.</p>
+      <ul id="history-list" class="history"></ul>
+      <p id="history-empty" class="muted">Aucune réunion pour l'instant.</p>
+    </section>
+  </main>
+
+  <dialog id="settings-dialog">
+    <div class="dialog-body">
+      <h2>Réglages</h2>
+      <p id="settings-notice" class="notice" hidden></p>
+
+      <fieldset>
+        <legend>Clés API (gratuites)</legend>
+        <label class="field">
+          <span>Clé Groq <em>(obligatoire)</em> : <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a></span>
+          <input id="groq-key" type="password" autocomplete="off" spellcheck="false" placeholder="gsk_…">
+        </label>
+        <label class="field">
+          <span>Clé Gemini <em>(facultative)</em> : <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></span>
+          <input id="gemini-key" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…">
+        </label>
+        <p class="muted small">Les clés restent dans ce navigateur (localStorage) et ne sont envoyées qu'à Groq et Google.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Transcription</legend>
+        <label class="field">
+          <span>Langue parlée</span>
+          <select id="language">
+            <option value="fr">Français</option>
+            <option value="en">Anglais</option>
+            <option value="ar">Arabe</option>
+            <option value="es">Espagnol</option>
+            <option value="auto">Détection automatique</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Vocabulaire (noms, sigles, jargon, pour une meilleure orthographe)</span>
+          <input id="vocabulary" type="text" placeholder="Ex. Sarah Benali, Kubernetes, CODIR, ONCF">
+        </label>
+        <div class="row">
+          <label class="field"><span>Ton nom</span><input id="me-label" type="text" maxlength="40"></label>
+          <label class="field"><span>L'autre personne</span><input id="them-label" type="text" maxlength="40"></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Résumé</legend>
+        <label class="field">
+          <span>Moteur du résumé</span>
+          <select id="summary-provider">
+            <option value="groq">Groq (données non utilisées pour l'entraînement)</option>
+            <option value="gemini">Gemini (meilleur sur les longues réunions ; en gratuit, Google peut utiliser les données)</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Langue du compte-rendu</span>
+          <select id="summary-language">
+            <option value="français">Français</option>
+            <option value="anglais">Anglais</option>
+          </select>
+        </label>
+      </fieldset>
+
+      <details>
+        <summary>Modèles (avancé)</summary>
+        <div class="row">
+          <label class="field"><span>Transcription (Groq)</span><input id="whisper-model" type="text" list="groq-models"></label>
+          <label class="field"><span>Résumé (Groq)</span><input id="groq-chat-model" type="text" list="groq-models"></label>
+          <label class="field"><span>Résumé (Gemini)</span><input id="gemini-model" type="text" list="gemini-models"></label>
+        </div>
+        <datalist id="groq-models"></datalist>
+        <datalist id="gemini-models"></datalist>
+      </details>
+
+      <p id="settings-status" class="small" role="status"></p>
+      <div class="dialog-actions">
+        <button id="test-keys-btn" type="button">Vérifier les clés</button>
+        <span class="spacer"></span>
+        <button id="settings-cancel" type="button" class="ghost">Annuler</button>
+        <button id="settings-save" type="button" class="primary">Enregistrer</button>
+      </div>
+    </div>
+  </dialog>
+</body>
+</html>
